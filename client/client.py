@@ -44,8 +44,9 @@ def save_config(mods_folder, launcher_type=None):
 # Tải cấu hình
 MODS_FOLDER, LAUNCHER_TYPE = load_config()
 
-# Tạo thư mục mods nếu chưa tồn tại
-os.makedirs(MODS_FOLDER, exist_ok=True)
+# Tạo thư mục mods nếu chưa tồn tại (chỉ khi đường dẫn hợp lệ)
+if os.path.exists(os.path.dirname(MODS_FOLDER)):
+    os.makedirs(MODS_FOLDER, exist_ok=True)
 
 # =========================
 # 🔍 Detect Launcher Paths
@@ -375,7 +376,15 @@ def browse_folder():
 # =========================
 root = tk.Tk()
 root.title("Minecraft Mods Sync Client")
-root.geometry("700x550")
+
+# Căn giữa cửa sổ
+window_width = 700
+window_height = 550
+screen_width = root.winfo_screenwidth()
+screen_height = root.winfo_screenheight()
+x = (screen_width - window_width) // 2
+y = (screen_height - window_height) // 2
+root.geometry(f"{window_width}x{window_height}+{x}+{y}")
 root.resizable(False, False)
 
 # Tiêu đề
