@@ -29,20 +29,35 @@ def load_config():
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                 config = json.load(f)
-                return config.get("mods_folder", DEFAULT_MODS_FOLDER), config.get("launcher_type", "curseforge")
+                return (
+                    config.get("mods_folder", DEFAULT_MODS_FOLDER), 
+                    config.get("launcher_type", "curseforge"),
+                    config.get("server_ip", SERVER_IPV6),
+                    config.get("server_port", str(SERVER_PORT))
+                )
         except:
             pass
-    return DEFAULT_MODS_FOLDER, "curseforge"
+    return DEFAULT_MODS_FOLDER, "curseforge", SERVER_IPV6, str(SERVER_PORT)
 
-def save_config(mods_folder, launcher_type=None):
+def save_config(mods_folder, launcher_type=None, server_ip=None, server_port=None):
     config = {"mods_folder": mods_folder}
     if launcher_type:
         config["launcher_type"] = launcher_type
+    if server_ip:
+        config["server_ip"] = server_ip
+    if server_port:
+        config["server_port"] = server_port
     with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
         json.dump(config, f, indent=2, ensure_ascii=False)
 
 # Tải cấu hình
-MODS_FOLDER, LAUNCHER_TYPE = load_config()
+MODS_FOLDER, LAUNCHER_TYPE, SAVED_SERVER_IP, SAVED_SERVER_PORT = load_config()
+
+# Sử dụng IP/Port đã lưu nếu có
+if SAVED_SERVER_IP and SAVED_SERVER_IP != "localhost":
+    SERVER_IPV6 = SAVED_SERVER_IP
+    SERVER_PORT = SAVED_SERVER_PORT
+    SERVER_URL = f"http://[{SERVER_IPV6}]:{SERVER_PORT}" if ":" in SERVER_IPV6 else f"http://{SERVER_IPV6}:{SERVER_PORT}"
 
 # Tạo thư mục mods nếu chưa tồn tại (chỉ khi đường dẫn hợp lệ)
 if os.path.exists(os.path.dirname(MODS_FOLDER)):
@@ -364,7 +379,7 @@ def on_launcher_change():
     path_entry.config(fg="gray", font=("Segoe UI", 8, "italic"))
     
     # Lưu launcher type với placeholder path
-    save_config(MODS_FOLDER, launcher_type)
+    save_config(MODS_FOLDER, launcher_type, SERVER_IPV6, SERVER_PORT)
     
     # Disable nút đồng bộ vì chưa có path thật
     sync_button.config(state="disabled", bg="#90EE90")
@@ -388,7 +403,7 @@ def browse_folder():
         
         if is_valid:
             MODS_FOLDER = folder
-            save_config(MODS_FOLDER, launcher_type)
+            save_config(MODS_FOLDER, launcher_type, SERVER_IPV6, SERVER_PORT)
             os.makedirs(MODS_FOLDER, exist_ok=True)
             
             # Hiển thị path đã chọn
@@ -407,12 +422,51 @@ def browse_folder():
 # =========================
 # 🖼️ Giao diện Tkinter
 # =========================
+def update_server_config():
+    """Cập nhật cấu hình server"""
+    global SERVER_IPV6, SERVER_PORT, SERVER_URL
+    
+    new_ip = server_ip_entry.get().strip()
+    new_port = server_port_entry.get().strip()
+    
+    if not new_ip:
+        messagebox.showerror("Lỗi", "❌ Vui lòng nhập địa chỉ IP!")
+        return
+    
+    if not new_port:
+        messagebox.showerror("Lỗi", "❌ Vui lòng nhập Port!")
+        return
+    
+    try:
+        port_num = int(new_port)
+        if port_num < 1 or port_num > 65535:
+            raise ValueError()
+    except:
+        messagebox.showerror("Lỗi", "❌ Port phải là số từ 1-65535!")
+        return
+    
+    # Cập nhật config
+    SERVER_IPV6 = new_ip
+    SERVER_PORT = new_port
+    SERVER_URL = f"http://[{SERVER_IPV6}]:{SERVER_PORT}" if ":" in SERVER_IPV6 else f"http://{SERVER_IPV6}:{SERVER_PORT}"
+    
+    # Lưu vào file
+    save_config(MODS_FOLDER, LAUNCHER_TYPE, SERVER_IPV6, SERVER_PORT)
+    
+    log_text.delete(1.0, tk.END)
+    log_text.insert(tk.END, f"✅ Đã cập nhật server:\n", "success")
+    log_text.insert(tk.END, f"   📡 IP: {SERVER_IPV6}\n", "info")
+    log_text.insert(tk.END, f"   🔌 Port: {SERVER_PORT}\n", "info")
+    log_text.insert(tk.END, f"   🌐 URL: {SERVER_URL}\n\n", "info")
+    
+    messagebox.showinfo("Thành công", f"✅ Đã cập nhật server thành công!\n\n📡 {SERVER_URL}")
+
 root = tk.Tk()
 root.title("Minecraft Mods Sync Client")
 
 # Căn giữa cửa sổ
 window_width = 700
-window_height = 550
+window_height = 600  # Tăng chiều cao
 screen_width = root.winfo_screenwidth()
 screen_height = root.winfo_screenheight()
 x = (screen_width - window_width) // 2
@@ -423,6 +477,30 @@ root.resizable(False, False)
 # Tiêu đề
 title_label = tk.Label(root, text="🎮 Minecraft Mods Synchronizer", font=("Segoe UI", 14, "bold"))
 title_label.pack(pady=10)
+
+# Frame cho server settings
+server_frame = tk.LabelFrame(root, text="🌐 Server Settings", font=("Segoe UI", 10, "bold"))
+server_frame.pack(pady=5, padx=20, fill="x")
+
+server_inner_frame = tk.Frame(server_frame)
+server_inner_frame.pack(pady=5, padx=5, fill="x")
+
+# IP Entry
+tk.Label(server_inner_frame, text="IP:", font=("Segoe UI", 9), width=8, anchor="w").pack(side="left", padx=5)
+server_ip_entry = tk.Entry(server_inner_frame, font=("Segoe UI", 9), width=25)
+server_ip_entry.insert(0, SERVER_IPV6)
+server_ip_entry.pack(side="left", padx=5)
+
+# Port Entry
+tk.Label(server_inner_frame, text="Port:", font=("Segoe UI", 9), width=6, anchor="w").pack(side="left", padx=5)
+server_port_entry = tk.Entry(server_inner_frame, font=("Segoe UI", 9), width=8)
+server_port_entry.insert(0, SERVER_PORT)
+server_port_entry.pack(side="left", padx=5)
+
+# Update button
+update_server_btn = tk.Button(server_inner_frame, text="💾 Lưu", font=("Segoe UI", 9),
+                               command=update_server_config, width=8, bg="#2196F3", fg="white")
+update_server_btn.pack(side="left", padx=5)
 
 # Frame cho launcher selection
 launcher_frame = tk.LabelFrame(root, text="🚀 Chọn Launcher", font=("Segoe UI", 10, "bold"))
