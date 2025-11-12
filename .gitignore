@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# PyInstaller
+*.spec
+build/
+dist/
+
+# Config files (có thể chứa thông tin cá nhân)
+config.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+
+# Mods folder (files quá lớn)
+mods/*.jar
+mods/.connector/
+
+# Server specific
+server/__pycache__/
+server/mods.rar
