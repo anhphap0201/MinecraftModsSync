@@ -6,12 +6,21 @@ import os
 import threading
 import json
 
+# Load environment variables
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # dotenv không bắt buộc cho client
+
 # =========================
 # ⚙️ Cấu hình
 # =========================
 CONFIG_FILE = "config.json"
-SERVER_URL = "http://26.35.131.42:5000"
-DEFAULT_MODS_FOLDER = r"C:\Users\phapd\curseforge\minecraft\Instances\old\mods"
+SERVER_IPV6 = os.getenv("SERVER_IPV6", "localhost")
+SERVER_PORT = os.getenv("SERVER_PORT", "5000")
+SERVER_URL = f"http://[{SERVER_IPV6}]:{SERVER_PORT}" if ":" in SERVER_IPV6 else f"http://{SERVER_IPV6}:{SERVER_PORT}"
+DEFAULT_MODS_FOLDER = os.getenv("DEFAULT_MODS_FOLDER", r"C:\Users\YourUsername\AppData\Roaming\.minecraft\mods")
 
 # Đọc hoặc tạo file cấu hình
 def load_config():

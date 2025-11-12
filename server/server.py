@@ -3,6 +3,13 @@ from fastapi.responses import FileResponse, JSONResponse
 import hashlib
 import os
 
+# Load environment variables
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 app = FastAPI()
 
 # Đường dẫn đến thư mục chứa mods
@@ -10,6 +17,11 @@ MODS_FOLDER = os.path.join(os.path.dirname(__file__), "..", "mods")
 
 # Đường dẫn đến file client.exe
 CLIENT_EXE_PATH = os.path.join(os.path.dirname(__file__), "..", "client", "dist", "MinecraftModsSync.exe")
+
+# Server configuration từ .env
+SERVER_HOST = os.getenv("SERVER_HOST", "::")
+SERVER_PORT = int(os.getenv("SERVER_PORT", "5000"))
+SERVER_IPV6 = os.getenv("SERVER_IPV6", "localhost")
 
 def get_file_hash(path):
     """Tính hash SHA256 của file"""
@@ -111,10 +123,10 @@ if __name__ == "__main__":
     if os.path.exists(CLIENT_EXE_PATH):
         client_size = os.path.getsize(CLIENT_EXE_PATH)
         print(f"✅ Client EXE sẵn sàng: {client_size / (1024*1024):.2f} MB")
-        print(f"� Link tải: http://localhost:5000/download-client")
+        print(f"📥 Link tải: http://[{SERVER_IPV6}]:{SERVER_PORT}/download-client")
     else:
         print(f"⚠️ Client EXE chưa có: {CLIENT_EXE_PATH}")
     
-    print("�🚀 Đang khởi động server tại http://localhost:5000")
-    print("📖 API docs: http://localhost:5000/docs")
-    uvicorn.run("server:app", host="0.0.0.0", port=5000, reload=True)
+    print(f"🚀 Đang khởi động server tại http://[{SERVER_HOST}]:{SERVER_PORT}")
+    print(f"📖 API docs: http://[{SERVER_IPV6}]:{SERVER_PORT}/docs")
+    uvicorn.run("server:app", host=SERVER_HOST, port=SERVER_PORT, reload=True)
