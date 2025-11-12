@@ -5,17 +5,32 @@ echo   Building Minecraft Mods Sync Client
 echo ========================================
 echo.
 
-REM Check if virtual environment exists
-if not exist "..\.venv\Scripts\activate.bat" (
+REM Save current directory and change to script directory
+set "ORIGINAL_DIR=%CD%"
+cd /d "%~dp0"
+
+REM Check if virtual environment exists (check both locations)
+set "VENV_FOUND=0"
+if exist "..\.venv\Scripts\activate.bat" (
+    set "VENV_PATH=..\.venv\Scripts\activate.bat"
+    set "VENV_FOUND=1"
+)
+if exist ".venv\Scripts\activate.bat" (
+    set "VENV_PATH=.venv\Scripts\activate.bat"
+    set "VENV_FOUND=1"
+)
+
+if "%VENV_FOUND%"=="0" (
     echo Error: Virtual environment not found!
-    echo Please run this from the client directory with venv in parent folder
+    echo Please ensure .venv exists in parent or current directory
+    cd /d "%ORIGINAL_DIR%"
     pause
     exit /b 1
 )
 
 REM Activate virtual environment
 echo Activating virtual environment...
-call ..\.venv\Scripts\activate.bat
+call "%VENV_PATH%"
 
 REM Install PyInstaller if not exists
 echo.
@@ -70,4 +85,5 @@ if %errorlevel% equ 0 (
 )
 
 echo.
+cd /d "%ORIGINAL_DIR%"
 pause
