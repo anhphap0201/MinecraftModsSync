@@ -5,11 +5,12 @@ import os
 import socket
 from pathlib import Path
 import sys
+import hashlib
 
-# Import server code
+# FastAPI
 import uvicorn
-from fastapi import FastAPI
-from server import app, get_all_mods, MODS_FOLDER
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 
 # Load environment variables
 try:
@@ -17,6 +18,92 @@ try:
     load_dotenv()
 except ImportError:
     pass
+
+# =========================
+# 🌐 FastAPI Server Setup
+# =========================
+app = FastAPI()
+
+# Đường dẫn đến thư mục chứa mods
+MODS_FOLDER = os.path.join(os.path.dirname(__file__), "..", "mods")
+
+# Đường dẫn đến file client.exe
+CLIENT_EXE_PATH = os.path.join(os.path.dirname(__file__), "..", "client", "dist", "MinecraftModsSync.exe")
+
+def get_file_hash(path):
+    """Tính hash SHA256 của file"""
+    sha256 = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            sha256.update(chunk)
+    return sha256.hexdigest()
+
+def get_all_mods():
+    """Lấy danh sách tất cả mods và thông tin của chúng"""
+    mods = {}
+    if not os.path.exists(MODS_FOLDER):
+        return mods
+    
+    for filename in os.listdir(MODS_FOLDER):
+        # Chỉ lấy file .jar (Minecraft mods)
+        if filename.endswith('.jar'):
+            filepath = os.path.join(MODS_FOLDER, filename)
+            mods[filename] = {
+                "hash": get_file_hash(filepath),
+                "size": os.path.getsize(filepath)
+            }
+    return mods
+
+@app.get("/")
+def root():
+    """Endpoint gốc"""
+    return {
+        "message": "Minecraft Mods Sync Server", 
+        "version": "2.0",
+        "endpoints": {
+            "GET /mods": "Lấy danh sách mods",
+            "GET /download/{mod_name}": "Tải mod cụ thể",
+            "GET /download-client": "Tải client.exe"
+        }
+    }
+
+@app.get("/mods")
+def get_mods_list():
+    """Trả về danh sách tất cả mods và hash của chúng"""
+    mods = get_all_mods()
+    return {
+        "count": len(mods),
+        "mods": mods
+    }
+
+@app.get("/download/{mod_name}")
+def download_mod(mod_name: str):
+    """Cho phép client tải một mod cụ thể"""
+    # Kiểm tra tên file hợp lệ (chỉ .jar và không có path traversal)
+    if not mod_name.endswith('.jar') or '/' in mod_name or '\\' in mod_name:
+        raise HTTPException(status_code=400, detail="Invalid mod name")
+    
+    filepath = os.path.join(MODS_FOLDER, mod_name)
+    
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="Mod not found")
+    
+    return FileResponse(filepath, filename=mod_name, media_type="application/java-archive")
+
+@app.get("/download-client")
+def download_client():
+    """Cho phép tải file client.exe"""
+    if not os.path.exists(CLIENT_EXE_PATH):
+        raise HTTPException(status_code=404, detail="Client not found. Please build the client first.")
+    
+    return FileResponse(
+        CLIENT_EXE_PATH, 
+        filename="MinecraftModsSync.exe",
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": "attachment; filename=MinecraftModsSync.exe"
+        }
+    )
 
 # =========================
 # ⚙️ Cấu hình
