@@ -19,6 +19,7 @@ dist/
 
 # Config files (có thể chứa thông tin cá nhân)
 config.json
+.env
 
 # IDE
 .vscode/
