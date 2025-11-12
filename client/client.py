@@ -5,6 +5,7 @@ import hashlib
 import os
 import threading
 import json
+from pathlib import Path
 
 # Load environment variables
 try:
@@ -28,20 +29,92 @@ def load_config():
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                 config = json.load(f)
-                return config.get("mods_folder", DEFAULT_MODS_FOLDER)
+                return config.get("mods_folder", DEFAULT_MODS_FOLDER), config.get("launcher_type", "curseforge")
         except:
             pass
-    return DEFAULT_MODS_FOLDER
+    return DEFAULT_MODS_FOLDER, "curseforge"
 
-def save_config(mods_folder):
+def save_config(mods_folder, launcher_type=None):
+    config = {"mods_folder": mods_folder}
+    if launcher_type:
+        config["launcher_type"] = launcher_type
     with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-        json.dump({"mods_folder": mods_folder}, f, indent=2, ensure_ascii=False)
+        json.dump(config, f, indent=2, ensure_ascii=False)
 
 # Tải cấu hình
-MODS_FOLDER = load_config()
+MODS_FOLDER, LAUNCHER_TYPE = load_config()
 
 # Tạo thư mục mods nếu chưa tồn tại
 os.makedirs(MODS_FOLDER, exist_ok=True)
+
+# =========================
+# 🔍 Detect Launcher Paths
+# =========================
+def detect_launcher_base_path(launcher_type):
+    """Detect base path cho launcher"""
+    if launcher_type == "prism":
+        # Tìm PrismLauncher trong các thư mục phổ biến
+        possible_paths = [
+            Path(os.getenv("APPDATA")) / "PrismLauncher",
+            Path("C:/Program Files/PrismLauncher"),
+            Path("C:/Program Files (x86)/PrismLauncher"),
+            Path.home() / "PrismLauncher",
+        ]
+        for path in possible_paths:
+            instances_path = path / "instances"
+            if instances_path.exists():
+                return str(instances_path)
+        return str(Path(os.getenv("APPDATA")) / "PrismLauncher" / "instances")
+    
+    elif launcher_type == "curseforge":
+        # Tìm CurseForge
+        possible_paths = [
+            Path(os.getenv("APPDATA")) / "curseforge" / "minecraft" / "Instances",
+            Path("C:/curseforge/minecraft/Instances"),
+            Path.home() / "curseforge" / "minecraft" / "Instances",
+        ]
+        for path in possible_paths:
+            if path.exists():
+                return str(path)
+        return str(Path(os.getenv("APPDATA")) / "curseforge" / "minecraft" / "Instances")
+    
+    return ""
+
+def get_suggested_path(launcher_type):
+    """Lấy suggested path pattern cho launcher"""
+    base = detect_launcher_base_path(launcher_type)
+    if launcher_type == "prism":
+        return f"{base}\\<tên instance>\\minecraft\\mods"
+    else:  # curseforge
+        return f"{base}\\<tên instance>\\mods"
+
+def validate_mods_path(path, launcher_type):
+    """Kiểm tra xem path có phải là folder mods hợp lệ không"""
+    path_obj = Path(path)
+    
+    # Kiểm tra folder có tồn tại không
+    if not path_obj.exists():
+        return False, "❌ Thư mục không tồn tại"
+    
+    # Kiểm tra có phải folder "mods" không
+    if path_obj.name.lower() != "mods":
+        return False, "❌ Thư mục phải có tên 'mods'"
+    
+    # Kiểm tra cấu trúc path theo launcher
+    path_str = str(path_obj).lower()
+    
+    if launcher_type == "prism":
+        # Prism: ...instances\<instance>\minecraft\mods
+        if "instances" not in path_str:
+            return False, "❌ Không tìm thấy 'instances' trong đường dẫn"
+        if "minecraft" not in path_str:
+            return False, "❌ Không tìm thấy 'minecraft' trong đường dẫn"
+    else:  # curseforge
+        # CurseForge: ...Instances\<instance>\mods
+        if "instances" not in path_str:
+            return False, "❌ Không tìm thấy 'Instances' trong đường dẫn"
+    
+    return True, "✅ Đường dẫn hợp lệ"
 
 # =========================
 # 🔒 Hàm tiện ích
@@ -75,7 +148,21 @@ outdated_mods = []
 extra_mods = []
 
 def check_update():
-    global missing_mods, outdated_mods, extra_mods
+    global missing_mods, outdated_mods, extra_mods, MODS_FOLDER
+    
+    # Lấy launcher type hiện tại
+    launcher_type = launcher_var.get()
+    
+    # Validate path trước khi quét
+    is_valid, msg = validate_mods_path(MODS_FOLDER, launcher_type)
+    if not is_valid:
+        status_label.config(text=msg, fg="red")
+        messagebox.showerror("Đường dẫn không hợp lệ", 
+                            f"{msg}\n\n"
+                            f"Đường dẫn đúng cho {launcher_type.upper()}:\n"
+                            f"{get_suggested_path(launcher_type)}")
+        return
+    
     status_label.config(text="🔄 Đang kiểm tra mods...", fg="blue")
     log_text.delete(1.0, tk.END)
     
@@ -234,41 +321,110 @@ def _perform_sync():
 # =========================
 # ⚙️ Chọn thư mục
 # =========================
+def on_launcher_change():
+    """Khi người dùng chọn launcher khác"""
+    global MODS_FOLDER
+    launcher_type = launcher_var.get()
+    
+    # Cập nhật suggested path
+    suggested = get_suggested_path(launcher_type)
+    path_entry.delete(0, tk.END)
+    path_entry.insert(0, suggested)
+    path_entry.config(fg="gray", font=("Segoe UI", 8, "italic"))
+    
+    # Lưu launcher type
+    save_config(MODS_FOLDER, launcher_type)
+    
+    log_text.delete(1.0, tk.END)
+    log_text.insert(tk.END, f"💡 Đã chọn launcher: {launcher_type.upper()}\n", "info")
+    log_text.insert(tk.END, f"📁 Đường dẫn mẫu: {suggested}\n\n", "info")
+    log_text.insert(tk.END, "👉 Vui lòng chọn đúng thư mục 'mods' của instance bạn muốn đồng bộ\n", "warning")
+
 def browse_folder():
     """Chọn thư mục mods mới"""
     global MODS_FOLDER
     
-    folder = filedialog.askdirectory(initialdir=MODS_FOLDER, title="Chọn thư mục Mods")
+    launcher_type = launcher_var.get()
+    base_path = detect_launcher_base_path(launcher_type)
+    
+    folder = filedialog.askdirectory(initialdir=base_path, title=f"Chọn thư mục Mods - {launcher_type.upper()}")
     if folder:
-        MODS_FOLDER = folder
-        save_config(MODS_FOLDER)
-        os.makedirs(MODS_FOLDER, exist_ok=True)
-        path_label.config(text=f"📁 {MODS_FOLDER}")
-        log_text.insert(tk.END, f"✅ Đã chuyển thư mục: {MODS_FOLDER}\n")
-        messagebox.showinfo("Thành công", "✅ Đã thay đổi thư mục mods!")
+        # Validate path
+        is_valid, msg = validate_mods_path(folder, launcher_type)
+        
+        if is_valid:
+            MODS_FOLDER = folder
+            save_config(MODS_FOLDER, launcher_type)
+            os.makedirs(MODS_FOLDER, exist_ok=True)
+            
+            # Hiển thị path đã chọn
+            path_entry.delete(0, tk.END)
+            path_entry.insert(0, MODS_FOLDER)
+            path_entry.config(fg="black", font=("Segoe UI", 8, "normal"))
+            
+            log_text.insert(tk.END, f"✅ Đã chọn thư mục: {MODS_FOLDER}\n", "success")
+            messagebox.showinfo("Thành công", "✅ Đã thay đổi thư mục mods!")
+        else:
+            messagebox.showerror("Đường dẫn không hợp lệ", 
+                               f"{msg}\n\n"
+                               f"Đường dẫn đúng cho {launcher_type.upper()}:\n"
+                               f"{get_suggested_path(launcher_type)}")
 
 # =========================
 # 🖼️ Giao diện Tkinter
 # =========================
 root = tk.Tk()
 root.title("Minecraft Mods Sync Client")
-root.geometry("650x500")
+root.geometry("700x550")
 root.resizable(False, False)
 
 # Tiêu đề
 title_label = tk.Label(root, text="🎮 Minecraft Mods Synchronizer", font=("Segoe UI", 14, "bold"))
 title_label.pack(pady=10)
 
-# Đường dẫn mods với nút chọn folder
-path_frame = tk.Frame(root)
-path_frame.pack(pady=5)
+# Frame cho launcher selection
+launcher_frame = tk.LabelFrame(root, text="🚀 Chọn Launcher", font=("Segoe UI", 10, "bold"))
+launcher_frame.pack(pady=5, padx=20, fill="x")
 
-path_label = tk.Label(path_frame, text=f"📁 {MODS_FOLDER}", font=("Segoe UI", 9), fg="gray")
-path_label.pack(side="left", padx=5)
+# Radio buttons cho launcher
+launcher_var = tk.StringVar(value=LAUNCHER_TYPE)
 
-browse_button = tk.Button(path_frame, text="📂 Chọn", font=("Segoe UI", 8), 
-                          command=browse_folder, width=8)
-browse_button.pack(side="left", padx=2)
+radio_frame = tk.Frame(launcher_frame)
+radio_frame.pack(pady=5)
+
+prism_radio = tk.Radiobutton(radio_frame, text="🔷 Prism Launcher", 
+                              variable=launcher_var, value="prism",
+                              font=("Segoe UI", 10), command=on_launcher_change)
+prism_radio.pack(side="left", padx=20)
+
+curseforge_radio = tk.Radiobutton(radio_frame, text="🔶 CurseForge", 
+                                   variable=launcher_var, value="curseforge",
+                                   font=("Segoe UI", 10), command=on_launcher_change)
+curseforge_radio.pack(side="left", padx=20)
+
+# Frame cho đường dẫn
+path_frame = tk.LabelFrame(root, text="📁 Đường dẫn Mods", font=("Segoe UI", 10, "bold"))
+path_frame.pack(pady=5, padx=20, fill="x")
+
+# Entry hiển thị path với placeholder
+path_inner_frame = tk.Frame(path_frame)
+path_inner_frame.pack(pady=5, padx=5, fill="x")
+
+path_entry = tk.Entry(path_inner_frame, font=("Segoe UI", 8), fg="gray")
+path_entry.pack(side="left", fill="x", expand=True, padx=(0, 5))
+
+# Hiển thị path hiện tại hoặc suggested path
+if MODS_FOLDER and MODS_FOLDER != DEFAULT_MODS_FOLDER:
+    path_entry.insert(0, MODS_FOLDER)
+    path_entry.config(fg="black", font=("Segoe UI", 8, "normal"))
+else:
+    suggested = get_suggested_path(LAUNCHER_TYPE)
+    path_entry.insert(0, suggested)
+    path_entry.config(fg="gray", font=("Segoe UI", 8, "italic"))
+
+browse_button = tk.Button(path_inner_frame, text="📂 Chọn", font=("Segoe UI", 9), 
+                          command=browse_folder, width=10)
+browse_button.pack(side="left")
 
 # Trạng thái
 status_label = tk.Label(root, text="Chưa kiểm tra", font=("Segoe UI", 11))

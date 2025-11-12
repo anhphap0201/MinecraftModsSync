@@ -7,9 +7,13 @@
 - 🔍 **Quét và so sánh** mods giữa server và client
 - 📥 **Tự động tải** mods thiếu hoặc cũ
 - 🗑️ **Tự động xóa** mods thừa không có trên server
-- 📊 **Giao diện trực quan** với Tkinter
+- � **Hỗ trợ 2 Launcher** - Prism Launcher và CurseForge
+- 🎯 **Auto-detect đường dẫn** launcher
+- ✅ **Validate path** - Kiểm tra đường dẫn mods hợp lệ
+- �📊 **Giao diện trực quan** với Tkinter
 - 🚀 **Client độc lập** - File EXE không cần cài Python
 - 🌐 **Server FastAPI** - Nhanh và hiện đại
+- 🔐 **Environment Variables** - Bảo mật thông tin nhạy cảm
 
 ## 📁 Cấu trúc dự án
 
@@ -51,16 +55,48 @@ Server sẽ chạy tại: `http://0.0.0.0:5000`
    - Thư mục `client/dist/`
    - Hoặc từ server: `http://SERVER_IP:5000/download-client`
 
-2. Chạy file EXE và sử dụng!
+2. Chạy file EXE:
+   - **Chọn Launcher:** 🔷 Prism Launcher hoặc 🔶 CurseForge
+   - **Chọn thư mục mods:** Nhấn nút "📂 Chọn" và dẫn tới thư mục mods của instance
+   - **Quét kiểm tra:** Nhấn "🔍 Quét kiểm tra" để so sánh với server
+   - **Đồng bộ:** Nếu có thay đổi, nhấn "✅ ĐỒNG BỘ NGAY"
+
+#### **Launcher Path Guidelines**
+
+**🔷 Prism Launcher:**
+```
+<đường dẫn PrismLauncher>\PrismLauncher\instances\<tên instance>\minecraft\mods
+```
+Ví dụ:
+```
+C:\Users\YourName\AppData\Roaming\PrismLauncher\instances\MyModpack\minecraft\mods
+```
+
+**🔶 CurseForge:**
+```
+<đường dẫn curseforge>\curseforge\minecraft\Instances\<tên instance>\mods
+```
+Ví dụ:
+```
+C:\Users\YourName\curseforge\minecraft\Instances\MyModpack\mods
+```
+
+> ⚠️ **Lưu ý:** Client sẽ tự động detect và gợi ý đường dẫn. Đảm bảo chọn đúng thư mục `mods` của instance bạn muốn đồng bộ!
 
 #### **Cách 2: Chạy từ source code**
 
 1. **Cài đặt dependencies:**
 ```bash
-pip install requests
+pip install requests python-dotenv
 ```
 
-2. **Chạy client:**
+2. **Tạo file `.env` (tùy chọn):**
+```bash
+cp .env.example .env
+# Sửa SERVER_IPV6 và SERVER_PORT trong .env
+```
+
+3. **Chạy client:**
 ```bash
 cd client
 python client.py
@@ -83,14 +119,34 @@ File EXE sẽ nằm trong `client/dist/`
 
 ## 🔧 Cấu hình
 
+### **Environment Variables (Khuyến nghị)**
+
+1. **Copy `.env.example` thành `.env`:**
+```bash
+cp .env.example .env
+```
+
+2. **Sửa các giá trị trong `.env`:**
+```bash
+# Server configuration
+SERVER_IPV6=your_server_ipv6_or_ip_here
+SERVER_PORT=5000
+SERVER_HOST=::
+
+# Client configuration (optional)
+DEFAULT_MODS_FOLDER=C:\Users\YourUsername\AppData\Roaming\.minecraft\mods
+```
+
 ### **Client**
 
-- **Server URL:** Mặc định `http://26.35.131.42:5000` (sửa trong `client.py`)
-- **Mods Folder:** Chọn thông qua giao diện hoặc sửa trong `config.json`
+- **Server URL:** Load từ `.env` (SERVER_IPV6, SERVER_PORT) hoặc mặc định `localhost:5000`
+- **Launcher Type:** Chọn trong giao diện (Prism Launcher hoặc CurseForge)
+- **Mods Folder:** Chọn thông qua giao diện, lưu trong `config.json`
 
 ### **Server**
 
-Server tự động quét thư mục `mods/` và phục vụ tất cả file `.jar`
+- **Host & Port:** Load từ `.env` hoặc mặc định `::5000` (IPv6 + IPv4)
+- Server tự động quét thư mục `mods/` và phục vụ tất cả file `.jar`
 
 ## 📡 API Endpoints
 
