@@ -154,6 +154,15 @@ def check_update():
     # Lấy launcher type hiện tại
     launcher_type = launcher_var.get()
     
+    # Kiểm tra xem đã chọn đường dẫn thật chưa (không phải placeholder)
+    if "<tên instance>" in MODS_FOLDER:
+        status_label.config(text="❌ Vui lòng chọn thư mục mods!", fg="red")
+        messagebox.showwarning("Chưa chọn thư mục", 
+                              f"⚠️ Vui lòng nhấn nút '📂 Chọn' để chọn thư mục mods!\n\n"
+                              f"Đường dẫn đúng cho {launcher_type.upper()}:\n"
+                              f"{get_suggested_path(launcher_type)}")
+        return
+    
     # Validate path trước khi quét
     is_valid, msg = validate_mods_path(MODS_FOLDER, launcher_type)
     if not is_valid:
@@ -167,11 +176,8 @@ def check_update():
     status_label.config(text="🔄 Đang kiểm tra mods...", fg="blue")
     log_text.delete(1.0, tk.END)
     
-    # Ẩn nút đồng bộ trước khi kiểm tra
-    try:
-        sync_button.pack_forget()
-    except:
-        pass
+    # Disable nút đồng bộ khi đang kiểm tra
+    sync_button.config(state="disabled", bg="#90EE90")
     
     root.update_idletasks()
 
@@ -196,16 +202,13 @@ def check_update():
         for mod_name, mod_info in server_mods.items():
             if mod_name not in local_mods:
                 missing_mods.append(mod_name)
-                log_text.insert(tk.END, f"❌ Thiếu: {mod_name}\n", "missing")
             elif local_mods[mod_name]["hash"] != mod_info["hash"]:
                 outdated_mods.append(mod_name)
-                log_text.insert(tk.END, f"🔄 Cũ: {mod_name}\n", "outdated")
         
         # Kiểm tra mods thừa (có local nhưng không có trên server)
         for mod_name in local_mods:
             if mod_name not in server_mods:
                 extra_mods.append(mod_name)
-                log_text.insert(tk.END, f"➕ Thừa: {mod_name}\n", "extra")
         
         # Cấu hình màu chữ
         log_text.tag_config("missing", foreground="red")
@@ -219,30 +222,48 @@ def check_update():
         total_need_update = len(missing_mods) + len(outdated_mods)
         
         if total_need_update == 0 and len(extra_mods) == 0:
-            # Không có thay đổi - hiện chữ xanh
+            # Không có thay đổi - disable nút đồng bộ
             status_label.config(text="✅ Không có cập nhật, mọi thứ đã đồng bộ!", fg="green")
             log_text.insert(tk.END, f"\n✅ Tất cả mods đã cập nhật!\n", "success")
+            sync_button.config(state="disabled", bg="#90EE90")
         else:
-            # Có thay đổi - hiện nút đồng bộ
+            # Có thay đổi - enable nút đồng bộ với màu xanh đậm
             status_label.config(text="🟡 Phát hiện thay đổi!", fg="orange")
+            sync_button.config(state="normal", bg="#4CAF50")
             
-            # Tạo text thông tin
+            # Tạo text thông tin tổng hợp
             info_text = []
             if total_need_update > 0:
                 info_text.append(f"📥 {total_need_update} mods cần tải/cập nhật")
             if len(extra_mods) > 0:
                 info_text.append(f"🗑️ {len(extra_mods)} mods thừa")
             
-            log_text.insert(tk.END, f"\n⚠️ {' | '.join(info_text)}\n", "warning")
-            log_text.insert(tk.END, "💡 Nhấn nút XANH LÁ bên dưới để đồng bộ\n\n", "info")
+            log_text.insert(tk.END, f"\n⚠️ {' | '.join(info_text)}\n\n", "warning")
             
-            # Hiện nút đồng bộ to và rõ ràng
-            sync_button.pack(pady=5, padx=20, fill="x")
+            # Sau đó hiển thị chi tiết từng mod
+            if missing_mods:
+                log_text.insert(tk.END, "❌ Mods thiếu:\n", "info")
+                for mod_name in missing_mods:
+                    log_text.insert(tk.END, f"   • {mod_name}\n", "missing")
+                log_text.insert(tk.END, "\n")
+            
+            if outdated_mods:
+                log_text.insert(tk.END, "🔄 Mods cần cập nhật:\n", "info")
+                for mod_name in outdated_mods:
+                    log_text.insert(tk.END, f"   • {mod_name}\n", "outdated")
+                log_text.insert(tk.END, "\n")
+            
+            if extra_mods:
+                log_text.insert(tk.END, "➕ Mods thừa:\n", "info")
+                for mod_name in extra_mods:
+                    log_text.insert(tk.END, f"   • {mod_name}\n", "extra")
+                log_text.insert(tk.END, "\n")
             root.update_idletasks()
         
     except Exception as e:
         status_label.config(text=f"❌ Lỗi kết nối server", fg="red")
         log_text.insert(tk.END, f"❌ Lỗi: {e}\n")
+        sync_button.config(state="disabled", bg="#90EE90")
         messagebox.showerror("Lỗi kết nối", f"❌ Không thể kết nối server:\n{e}")
 
 # =========================
@@ -250,7 +271,7 @@ def check_update():
 # =========================
 def start_sync():
     """Bắt đầu đồng bộ khi người dùng nhấn nút"""
-    sync_button.pack_forget()  # Ẩn nút đồng bộ
+    sync_button.config(state="disabled", bg="#90EE90")  # Disable nút khi đang đồng bộ
     threading.Thread(target=_perform_sync, daemon=True).start()
 
 # =========================
@@ -311,12 +332,17 @@ def _perform_sync():
         log_text.insert(tk.END, f"\n✅ Đã đồng bộ hoàn tất!\n", "success")
         log_text.see(tk.END)
         
+        # Disable nút đồng bộ sau khi hoàn tất
+        sync_button.config(state="disabled", bg="#90EE90")
+        
         messagebox.showinfo("Thành công", "✅ Đã đồng bộ mods thành công!")
         
     except Exception as e:
         status_label.config(text="❌ Lỗi đồng bộ", fg="red")
         progress_label.config(text="Thất bại")
         log_text.insert(tk.END, f"\n❌ Lỗi: {e}\n")
+        # Enable lại nút đồng bộ nếu có lỗi
+        sync_button.config(state="normal", bg="#4CAF50")
         messagebox.showerror("Lỗi đồng bộ", f"❌ Không thể đồng bộ:\n{e}")
 
 # =========================
@@ -329,12 +355,19 @@ def on_launcher_change():
     
     # Cập nhật suggested path
     suggested = get_suggested_path(launcher_type)
+    
+    # Reset MODS_FOLDER về placeholder khi đổi launcher
+    MODS_FOLDER = suggested
+    
     path_entry.delete(0, tk.END)
     path_entry.insert(0, suggested)
     path_entry.config(fg="gray", font=("Segoe UI", 8, "italic"))
     
-    # Lưu launcher type
+    # Lưu launcher type với placeholder path
     save_config(MODS_FOLDER, launcher_type)
+    
+    # Disable nút đồng bộ vì chưa có path thật
+    sync_button.config(state="disabled", bg="#90EE90")
     
     log_text.delete(1.0, tk.END)
     log_text.insert(tk.END, f"💡 Đã chọn launcher: {launcher_type.upper()}\n", "info")
@@ -423,11 +456,23 @@ path_entry = tk.Entry(path_inner_frame, font=("Segoe UI", 8), fg="gray")
 path_entry.pack(side="left", fill="x", expand=True, padx=(0, 5))
 
 # Hiển thị path hiện tại hoặc suggested path
-if MODS_FOLDER and MODS_FOLDER != DEFAULT_MODS_FOLDER:
+# Kiểm tra xem path đã lưu có phù hợp với launcher type không
+path_str = MODS_FOLDER.lower()
+is_valid_for_launcher = False
+
+if LAUNCHER_TYPE == "prism" and "prism" in path_str and "minecraft" in path_str:
+    is_valid_for_launcher = True
+elif LAUNCHER_TYPE == "curseforge" and "curseforge" in path_str and "instances" in path_str:
+    is_valid_for_launcher = True
+
+if MODS_FOLDER and MODS_FOLDER != DEFAULT_MODS_FOLDER and is_valid_for_launcher and "<tên instance>" not in MODS_FOLDER:
+    # Path hợp lệ và khớp với launcher - hiển thị path đã lưu
     path_entry.insert(0, MODS_FOLDER)
     path_entry.config(fg="black", font=("Segoe UI", 8, "normal"))
 else:
+    # Path không hợp lệ hoặc không khớp launcher - hiển thị placeholder
     suggested = get_suggested_path(LAUNCHER_TYPE)
+    MODS_FOLDER = suggested  # Reset về placeholder
     path_entry.insert(0, suggested)
     path_entry.config(fg="gray", font=("Segoe UI", 8, "italic"))
 
@@ -439,21 +484,23 @@ browse_button.pack(side="left")
 status_label = tk.Label(root, text="Chưa kiểm tra", font=("Segoe UI", 11))
 status_label.pack(pady=5)
 
-# Nút kiểm tra (giữa màn hình)
-check_button = tk.Button(root, text="🔍 Quét kiểm tra", font=("Segoe UI", 11, "bold"), 
-                         command=check_update, width=20, pady=5, bg="#2196F3", fg="white")
-check_button.pack(pady=10)
+# Frame chứa 2 nút ngang hàng
+buttons_frame = tk.Frame(root)
+buttons_frame.pack(pady=10)
 
-# Khung cho nút đồng bộ (để giữ vị trí cố định)
-sync_frame = tk.Frame(root)
-sync_frame.pack(pady=5)
+# Nút quét bên trái
+check_button = tk.Button(buttons_frame, text="🔍 Quét kiểm tra", font=("Segoe UI", 11, "bold"), 
+                         command=check_update, width=20, pady=8, bg="#2196F3", fg="white",
+                         cursor="hand2", relief="raised", borderwidth=2,
+                         activebackground="#1976D2")
+check_button.pack(side="left", padx=5)
 
-# Nút đồng bộ (ẩn mặc định, chỉ hiện khi có thay đổi)
-sync_button = tk.Button(sync_frame, text="✅ ĐỒNG BỘ NGAY", font=("Segoe UI", 13, "bold"), 
-                        command=start_sync, width=25, pady=10, bg="#4CAF50", fg="white",
-                        cursor="hand2", relief="raised", borderwidth=3,
-                        activebackground="#45a049")
-# Không pack ngay, chỉ pack khi có thay đổi
+# Nút đồng bộ bên phải (disabled ban đầu)
+sync_button = tk.Button(buttons_frame, text="✅ ĐỒNG BỘ NGAY", font=("Segoe UI", 11, "bold"), 
+                        command=start_sync, width=20, pady=8, bg="#90EE90", fg="white",
+                        cursor="hand2", relief="raised", borderwidth=2,
+                        activebackground="#45a049", state="disabled")
+sync_button.pack(side="left", padx=5)
 
 # Log text
 log_frame = tk.LabelFrame(root, text="📋 Chi tiết", font=("Segoe UI", 10, "bold"))
